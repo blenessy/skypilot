@@ -1458,8 +1458,22 @@ class Task:
 
     def set_resources_override(self, override_params: Dict[str, Any]) -> 'Task':
         """Sets the override parameters for the resources."""
+        requested_cloud = override_params.get('cloud')
+        resources = list(self.resources)
+        if requested_cloud is not None:
+            # Prefer the candidates for the requested cloud so their cloud-
+            # specific fields (e.g. image_id and ports) are preserved. Copying
+            # a different cloud's candidate would carry those fields across
+            # providers and can create an unsupported resource configuration.
+            matching_resources = [
+                res for res in resources if res.cloud is not None and
+                requested_cloud.is_same_cloud(res.cloud)
+            ]
+            if matching_resources:
+                resources = matching_resources
+
         new_resources_list = []
-        for res in list(self.resources):
+        for res in resources:
             new_resources = res.copy(**override_params)
             new_resources_list.append(new_resources)
 

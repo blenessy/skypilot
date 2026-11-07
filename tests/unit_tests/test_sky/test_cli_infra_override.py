@@ -2,6 +2,10 @@
 import unittest
 from unittest import mock
 
+import pytest
+
+from sky import exceptions
+from sky import task
 from sky.client.cli import command
 
 
@@ -274,6 +278,63 @@ class TestCliInfraOverride(unittest.TestCase):
         # This ensures that when Resources.copy(**override_params) is called,
         # it will override the YAML's region='us-east-1' with None,
         # effectively removing the region constraint and allowing any GCP region.
+
+
+def test_infra_override_selects_matching_cloud_candidate():
+    task_obj = task.Task(run='echo hello')
+    task_obj.set_resources({
+        'accelerators': 'L40S:1',
+        'any_of': [
+            {
+                'infra': 'nebius',
+                'image_id': 'nebius-image',
+                'ports': 8080,
+            },
+            {
+                'infra': 'verda',
+                'image_id': 'verda-image',
+            },
+        ],
+    })
+
+    cloud, region, zone = command._handle_infra_cloud_region_zone_options(
+        'verda', None, None, None)
+    override_params = command._parse_override_params(cloud=cloud,
+                                                     region=region,
+                                                     zone=zone)
+    task_obj.set_resources_override(override_params)
+
+    assert len(task_obj.resources) == 1
+    resources = next(iter(task_obj.resources))
+    assert str(resources.cloud) == 'Verda'
+    assert resources.image_id == {None: 'verda-image'}
+    assert resources.ports is None
+
+    required_features = resources.get_required_cloud_features()
+
+    resources.cloud.check_features_are_supported(resources, required_features)
+
+
+@pytest.mark.parametrize('cloud_override', ['aws', 'verda', 'nebius'])
+def test_infra_override_falls_back_when_no_cloud_candidate(cloud_override):
+    task_obj = task.Task(run='echo hello')
+    task_obj.set_resources({'accelerators': 'L40S:1', 'ports': 8080})
+
+    cloud, region, zone = command._handle_infra_cloud_region_zone_options(
+        cloud_override, None, None, None)
+    override_params = command._parse_override_params(cloud=cloud,
+                                                     region=region,
+                                                     zone=zone)
+    task_obj.set_resources_override(override_params)
+
+    assert len(task_obj.resources) == 1
+    resources = next(iter(task_obj.resources))
+    assert str(resources.cloud).lower() == cloud_override
+    assert resources.ports == ['8080']
+    if cloud_override == 'verda':
+        with pytest.raises(exceptions.NotSupportedError):
+            resources.cloud.check_features_are_supported(
+                resources, resources.get_required_cloud_features())
 
 
 class TestCliPriorityOverride(unittest.TestCase):
