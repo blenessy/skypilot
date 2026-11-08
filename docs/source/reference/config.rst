@@ -3114,6 +3114,13 @@ Advanced Nebius configuration (optional).
     GPU cluster configuration identifier (optional)
     Optional: GPU cluster disabled if not specified
 
+``provision_timeout``
+    Seconds an instance may stay in ``STARTING`` (or ``DELETING``/``STOPPING``)
+    without any pending instance leaving that state before the launch gives up
+    on the region and fails over (optional). Can be set at the cloud level or
+    per region under ``region_configs``.
+    Default: ``600``
+
 ``filesystems``
     List of filesystems to mount on the nodes (optional).
     Each filesystem is a dict with the following keys:
@@ -3135,6 +3142,9 @@ Example:
     nebius:
         use_internal_ips: true
         use_static_ip_address: true
+        # Seconds an instance may sit in STARTING/DELETING/STOPPING without
+        # progress before the launch fails over to another region
+        provision_timeout: 900
         ssh_proxy_command:
           eu-north1: ssh -W %h:%p -p 1234 -o StrictHostKeyChecking=no myself@my.us-central1.proxy
           eu-west1: ssh -W %h:%p -i ~/.ssh/sky-key -o StrictHostKeyChecking=no nebiususer@<jump server public ip>
@@ -3214,6 +3224,24 @@ Non-replicated and Network SSD IO M3 boot disks launched by SkyPilot. Network
 SSD boot disks are encrypted by default.
 
 Default: ``false``.
+
+.. _config-yaml-nebius-provision-timeout:
+
+``nebius.provision_timeout``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Seconds an instance may stay in ``STARTING``, ``DELETING``, or ``STOPPING``
+before SkyPilot stops waiting for it (optional).
+
+The budget is measured without progress: it resets whenever any pending
+instance leaves one of those states, so a multi-node cluster whose nodes come
+up one by one is not cut off while it is still making progress. When it runs
+out, the launch fails, the partially provisioned cluster is torn down, and
+SkyPilot fails over to the next candidate region or cloud.
+
+Can be set at the cloud level or per region under ``region_configs``.
+
+Default: ``600`` (120 polls, 5 seconds apart).
 
 .. _config-yaml-nebius-ssh-proxy-command:
 

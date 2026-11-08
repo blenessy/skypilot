@@ -1,4 +1,5 @@
 """Nebius library wrapper for SkyPilot."""
+import math
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
@@ -488,6 +489,23 @@ def list_instances(project_id: str) -> Dict[str, Dict[str, Any]]:
         instance_dict[instance.metadata.id] = info
 
     return instance_dict
+
+
+def polls_for_timeout(region: Optional[str], config_key: str,
+                      default_polls: int) -> int:
+    """Polls (POLL_INTERVAL apart) to wait for a configured timeout.
+
+    `nebius.<config_key>` (seconds) overrides `default_polls`, either at the
+    cloud level or per region. At least one poll is always made, so a timeout
+    shorter than a poll interval still checks the instance once.
+    """
+    timeout = skypilot_config.get_effective_region_config(cloud='nebius',
+                                                          region=region,
+                                                          keys=(config_key,),
+                                                          default_value=None)
+    if timeout is None:
+        return default_polls
+    return max(1, math.ceil(timeout / POLL_INTERVAL))
 
 
 def stop(instance_id: str) -> None:

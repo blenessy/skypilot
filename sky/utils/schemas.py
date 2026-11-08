@@ -2567,11 +2567,18 @@ def get_config_schema():
             'type': 'object',
             'required': [],
             'properties': {
-                **_NETWORK_CONFIG_SCHEMA, 'use_static_ip_address': {
+                **_NETWORK_CONFIG_SCHEMA,
+                'use_static_ip_address': {
                     'type': 'boolean',
                 },
                 'disk_encrypted': {
                     'type': 'boolean',
+                },
+                # Seconds an instance may stay in STARTING/DELETING/STOPPING
+                # without progress before a launch gives up on the region.
+                'provision_timeout': {
+                    'type': 'integer',
+                    'minimum': 1,
                 },
                 'tenant_id': {
                     'type': 'string',
@@ -2604,6 +2611,10 @@ def get_config_schema():
                             },
                             'disk_encrypted': {
                                 'type': 'boolean',
+                            },
+                            'provision_timeout': {
+                                'type': 'integer',
+                                'minimum': 1,
                             },
                             'filesystems': {
                                 'type': 'array',

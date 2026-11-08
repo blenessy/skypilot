@@ -15,10 +15,12 @@ from sky.utils import ux_utils
 
 PENDING_STATUS = ['STARTING', 'DELETING', 'STOPPING']
 
-# Polls (utils.POLL_INTERVAL seconds apart) to wait for a cluster's pending
-# instances without any of them leaving the pending states. The count resets
-# whenever one does, so a large cluster whose nodes come up one by one is not
-# cut off while it is still making progress.
+# Default polls (utils.POLL_INTERVAL seconds apart) to wait for a cluster's
+# pending instances without any of them leaving the pending states. The count
+# resets whenever one does, so a large cluster whose nodes come up one by one is
+# not cut off while it is still making progress.
+# Overridable with `nebius.provision_timeout` (seconds), either at the cloud
+# level or per region in `nebius.region_configs`.
 MAX_RETRIES_TO_LAUNCH = 120
 
 # Poll attempts (utils.POLL_INTERVAL seconds apart) to wait for a cluster's
@@ -64,16 +66,28 @@ def _get_head_instance_id(instances: Dict[str, Any]) -> Optional[str]:
     return head_instance_id
 
 
+def _max_retries_to_launch(region: str) -> int:
+    """Polls to wait for a pending instance in `region` without progress.
+
+    `nebius.provision_timeout` (seconds) overrides the default budget, either at
+    the cloud level or per region.
+    """
+    return utils.polls_for_timeout(region, 'provision_timeout',
+                                   MAX_RETRIES_TO_LAUNCH)
+
+
 def _wait_until_no_pending(region: str, cluster_name_on_cloud: str,
                            project_id: str) -> None:
     """Waits until none of the cluster's instances is in a pending state.
 
-    Times out after MAX_RETRIES_TO_LAUNCH polls in a row in which no pending
-    instance left the pending states, not after a fixed total.
+    Times out after `nebius.provision_timeout` seconds' worth of polls in a row
+    in which no pending instance left the pending states, not after a fixed
+    total (see `_max_retries_to_launch`).
     """
+    max_retries = _max_retries_to_launch(region)
     retry_count = 0
     prev_pending: Set[str] = set()
-    while retry_count < MAX_RETRIES_TO_LAUNCH:
+    while retry_count < max_retries:
         instances = _filter_instances(region,
                                       cluster_name_on_cloud,
                                       PENDING_STATUS,
@@ -86,15 +100,14 @@ def _wait_until_no_pending(region: str, cluster_name_on_cloud: str,
         prev_pending = pending
         logger.info(f'Waiting for {len(instances)} instances to leave '
                     f'{"/".join(PENDING_STATUS)} '
-                    f'(Attempt {retry_count + 1}/{MAX_RETRIES_TO_LAUNCH} '
+                    f'(Attempt {retry_count + 1}/{max_retries} '
                     'since one last did).')
         time.sleep(utils.POLL_INTERVAL)
         retry_count += 1
 
-    raise TimeoutError(
-        f'No instance left {"/".join(PENDING_STATUS)} for '
-        f'{MAX_RETRIES_TO_LAUNCH * utils.POLL_INTERVAL} seconds; '
-        f'still waiting on {len(prev_pending)} instances.')
+    raise TimeoutError(f'No instance left {"/".join(PENDING_STATUS)} for '
+                       f'{max_retries * utils.POLL_INTERVAL} seconds; '
+                       f'still waiting on {len(prev_pending)} instances.')
 
 
 def run_instances(region: str, cluster_name: str, cluster_name_on_cloud: str,
