@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 import urllib.request
 
 from sky.utils import directory_utils
+from sky.utils import env_options
 
 if TYPE_CHECKING:
     from importlib.metadata import EntryPoint
@@ -85,6 +86,29 @@ def _set_http_proxy_env_vars() -> None:
 
 
 _set_http_proxy_env_vars()
+
+
+# ---------------------- gRPC core logging ---------------------- #
+def _set_grpc_verbosity_env_var() -> None:
+    """Silences gRPC's C-core info logs unless SKYPILOT_DEBUG is set.
+
+    gRPC reads GRPC_VERBOSITY once, when ``grpc`` is imported, and its core
+    writes fork-handler diagnostics ("Other threads are currently calling into
+    gRPC, skipping fork() handlers" / "FD from fork parent still in poll
+    list") straight to stderr. Those bypass Python's logging module, so no log
+    filter can suppress them; see https://github.com/grpc/grpc/issues/37642.
+
+    This runs while the ``sky`` package is being imported, which Python does
+    before any ``sky.*`` submodule, so it also covers modules such as
+    ``sky.skylet.skylet`` that import grpc themselves.
+    """
+    if env_options.Options.SHOW_DEBUG_INFO.get():
+        return
+    # Respect an explicit user-provided verbosity.
+    os.environ.setdefault('GRPC_VERBOSITY', 'NONE')
+
+
+_set_grpc_verbosity_env_var()
 
 # ----------------------------------------------------------------- #
 

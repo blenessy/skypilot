@@ -102,11 +102,7 @@ if typing.TYPE_CHECKING:
     from sky.schemas.generated import servev1_pb2_grpc
 else:
     # To avoid requiring grpcio to be installed on the client side.
-    grpc = adaptors_common.LazyImport(
-        'grpc',
-        # https://github.com/grpc/grpc/issues/37642 to avoid spam in console
-        set_loggers=lambda: os.environ.update({'GRPC_VERBOSITY': 'NONE'})
-        if not env_options.Options.SHOW_DEBUG_INFO.get() else None)
+    grpc = adaptors_common.LazyImport('grpc')
     autostopv1_pb2 = adaptors_common.LazyImport(
         'sky.schemas.generated.autostopv1_pb2')
     autostopv1_pb2_grpc = adaptors_common.LazyImport(
